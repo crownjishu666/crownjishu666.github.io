@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>坦克大战 Battle City</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --yellow: #f7c948;
+      --green:  #4cde4c;
+      --red:    #e83030;
+      --bg:     #000000;
+      --bg2:    #060606;
+      --bg3:    #0a0a0a;
+      --border: #333333;
+      --muted:  #888888;
+      --dim:    #555555;
+      --fore:   #e8e8e8;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Press Start 2P', monospace;
+      background: var(--bg);
+      color: var(--fore);
+      -webkit-font-smoothing: none;
+      image-rendering: pixelated;
+    }
+
+    /* CRT scanlines */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.08) 2px,rgba(0,0,0,.08) 4px);
+      pointer-events: none; z-index: 9999;
+    }
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background: radial-gradient(ellipse at center,transparent 60%,rgba(0,0,0,.6) 100%);
+      pointer-events: none; z-index: 9998;
+    }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #000; }
+    ::-webkit-scrollbar-thumb { background: #444; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--yellow); }
+
+    /* Animations */
+    @keyframes blink   { 0%,49%{opacity:1} 50%,100%{opacity:0} }
+    @keyframes marquee { from{transform:translateX(100vw)} to{transform:translateX(-100%)} }
+    @keyframes bob     { 0%,100%{transform:translateY(0)} 25%{transform:translateY(-4px)} 75%{transform:translateY(4px)} }
+    @keyframes glow    { 0%,100%{text-shadow:0 0 4px currentColor} 50%{text-shadow:0 0 14px currentColor,0 0 28px currentColor} }
+    @keyframes shoot   { 0%{bottom:56px;opacity:1} 100%{bottom:126px;opacity:0} }
+
+    .blink { animation: blink 1s step-end infinite; }
+    .glow  { animation: glow 2s ease-in-out infinite; }
+    .bob   { animation: bob 1.2s ease-in-out infinite; }
+
+    /* Layout */
+    section { padding: 5rem 1.5rem; }
+    .inner  { max-width: 56rem; margin: 0 auto; }
+
+    .sec-label {
+      display: block; font-size: 8px; letter-spacing: .25em;
+      color: var(--green); margin-bottom: 1rem;
+    }
+    .sec-title {
+      font-size: clamp(.9rem, 3.5vw, 1.5rem); color: var(--yellow);
+      letter-spacing: .08em; margin-bottom: 2.5rem;
+    }
+
+    /* NAV */
+    #nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+      background: #7b5500; border-bottom: 4px solid var(--yellow);
+      padding: .5rem 1.5rem; display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo { display: flex; align-items: center; gap: .6rem; text-decoration: none; }
+    .nav-logo span { font-size: 8px; letter-spacing: .1em; color: var(--yellow); }
+    .nav-links a {
+      font-size: 7px; letter-spacing: .12em; color: var(--yellow);
+      text-decoration: none; margin-left: 1.5rem;
+    }
+    .nav-links a:hover { color: #fff; }
+    .hamburger { display: none; background: none; border: none; color: var(--yellow); font-size: 1.2rem; cursor: pointer; font-family: inherit; }
+    #mobile-menu { display: none; background: #5a3d00; border-top: 2px solid var(--yellow); padding: .75rem 1.5rem; flex-direction: column; gap: .75rem; }
+    #mobile-menu a { font-size: 8px; letter-spacing: .1em; color: var(--yellow); text-decoration: none; }
+    @media(max-width:600px){
+      .nav-links { display: none; }
+      .hamburger { display: block; }
+    }
+
+    /* HERO */
+    #hero {
+      min-height: 100svh; padding-top: 7rem; padding-bottom: 3rem;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      position: relative; overflow: hidden; background: var(--bg);
+    }
+    .scorebar {
+      position: absolute; top: 40px; left: 0; right: 0;
+      background: #7b5500; padding: .4rem 1.5rem;
+      display: flex; justify-content: space-between;
+      font-size: 7px; color: var(--yellow); letter-spacing: .1em;
+    }
+    @media(max-width:400px){ .scorebar span:nth-child(5), .scorebar span:nth-child(6) { display:none; } }
+
+    .hero-title {
+      font-size: clamp(1.6rem, 7vw, 4rem); color: var(--yellow);
+      letter-spacing: .05em; text-align: center; margin-bottom: .6rem;
+    }
+    .hero-sub { font-size: 8px; color: var(--fore); letter-spacing: .2em; text-align: center; margin-bottom: 2rem; }
+
+    /* Pixel battle scene */
+    .scene {
+      position: relative; width: 180px; height: 180px; margin: 0 auto;
+      background:
+        repeating-linear-gradient(rgba(76,222,76,.05) 0 1px,transparent 1px 16px),
+        repeating-linear-gradient(90deg,rgba(76,222,76,.05) 0 1px,transparent 1px 16px);
+    }
+    .scene .s-player { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); }
+    .scene .s-enemy  { position: absolute; top:   6px;  right: 12px; }
+    .scene .s-brick1 { position: absolute; bottom:58px; left:  6px;  }
+    .scene .s-brick2 { position: absolute; bottom:58px; right: 18px; }
+    .scene .s-base   { position: absolute; bottom: 0;   left: 50%;   transform: translateX(-50%); }
+    .scene .s-bullet {
+      position: absolute; left: 50%; width: 4px; height: 8px; margin-left: -2px;
+      background: var(--yellow); animation: shoot 1s linear infinite;
+    }
+
+    .cta-btn {
+      display: inline-block; margin-top: 1.5rem;
+      padding: .75rem 2.5rem; background: var(--yellow); color: #000;
+      font-family: 'Press Start 2P', monospace; font-size: 8px;
+      letter-spacing: .15em; text-decoration: none; border: none; cursor: pointer;
+    }
+    .cta-btn:hover { background: #fff; }
+
+    .lives { display: flex; align-items: center; gap: .6rem; margin-top: 1.25rem; font-size: 8px; color: var(--fore); }
+
+    .marquee-wrap {
+      position: absolute; bottom: 3rem; left: 0; right: 0; overflow: hidden;
+      border-top: 2px solid var(--border); border-bottom: 2px solid var(--border); padding: .4rem 0;
+    }
+    .marquee-inner { white-space: nowrap; font-size: 7px; color: var(--green); letter-spacing: .15em; animation: marquee 22s linear infinite; }
+
+    .scroll-hint { position: absolute; bottom: .75rem; font-size: 7px; color: var(--muted); }
+
+    /* STAT BAR */
+    .stat-bar { background: #0a0600; border-top: 4px solid var(--border); }
+    .stat-row  { max-width: 56rem; margin: 0 auto; display: flex; flex-wrap: wrap; }
+    .stat-item { flex: 1 1 9rem; padding: 1rem 1.5rem; border-right: 1px solid var(--border); }
+    .stat-item:last-child { border-right: none; }
+    .stat-v { font-size: 1.2rem; color: var(--yellow); display: block; margin-bottom: .4rem; }
+    .stat-l { font-size: 6px; color: var(--dim); letter-spacing: .1em; }
+
+    /* TANKS */
+    #tanks { background: var(--bg); border-top: 4px solid var(--border); }
+    .tank-tabs { display: flex; gap: 3px; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .tank-tab {
+      flex: 1 1 6rem; padding: .6rem .4rem; text-align: center;
+      font-family: 'Press Start 2P', monospace; font-size: 7px; letter-spacing: .06em;
+      cursor: pointer; border: 2px solid var(--border); background: var(--bg3); color: var(--muted);
+      user-select: none;
+    }
+    .tank-tab:hover { border-color: var(--yellow); color: var(--yellow); }
+    .tank-tab.active { background: var(--yellow); color: #000; border-color: var(--yellow); }
+    .tank-tab svg { display: block; margin: 0 auto .35rem; }
+
+    .tank-detail { border: 4px solid #555; background: var(--bg3); padding: 1.5rem; display: grid; gap: 1.5rem; }
+    @media(min-width:600px){ .tank-detail { grid-template-columns: 1fr 1fr; align-items: center; } }
+
+    .tank-showcase { display: flex; flex-direction: column; align-items: center; gap: .75rem; }
+    .tank-name { font-size: .9rem; color: var(--yellow); letter-spacing: .1em; }
+    .tank-sub  { font-size: 7px; color: var(--muted); }
+    .tank-pts  { padding: .35rem .9rem; background: var(--yellow); color: #000; font-size: 7px; letter-spacing: .1em; }
+
+    .spec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); }
+    .spec-cell { background: #0f0f0f; padding: .7rem 1rem; }
+    .spec-k { font-size: 6px; color: var(--dim); margin-bottom: .3rem; }
+    .spec-v { font-size: .8rem; color: var(--yellow); }
+    .tank-desc { font-size: 7px; color: var(--muted); line-height: 2.4; margin-top: 1rem; }
+
+    /* HOW TO PLAY */
+    #howto { background: var(--bg2); border-top: 4px solid var(--border); }
+    .howto-grid { display: grid; gap: 1.5rem; }
+    @media(min-width:640px){ .howto-grid { grid-template-columns: 1fr 1fr; } }
+    .howto-panel { border: 4px solid #555; padding: 1.5rem; }
+    .panel-label { font-size: 7px; color: var(--green); letter-spacing: .18em; margin-bottom: 1.5rem; display: block; }
+    .key-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1a1a1a; padding-bottom: .5rem; margin-bottom: .5rem; }
+    .key-badge { background: #222; padding: .25rem .5rem; font-size: 7px; color: var(--yellow); border: 1px solid #444; }
+    .key-val   { font-size: 7px; color: var(--muted); }
+    .rule-row { display: flex; gap: 1rem; margin-bottom: 1rem; }
+    .rule-num { font-size: 7px; color: var(--yellow); flex-shrink: 0; }
+    .rule-txt { font-size: 7px; color: var(--muted); line-height: 2.2; }
+    .eagle-warn { margin-top: 1.5rem; border: 2px dashed var(--yellow); padding: .75rem; display: flex; align-items: center; gap: 1rem; }
+    .warn-red  { font-size: 7px; color: var(--red); display: block; margin-bottom: .3rem; }
+    .warn-gray { font-size: 7px; color: var(--muted); }
+    .dpad { position: relative; width: 4.5rem; height: 4.5rem; margin: 1.5rem auto 0; }
+    .dpad-btn {
+      position: absolute; width: 1.4rem; height: 1.4rem;
+      background: #333; border: 1px solid #555;
+      display: flex; align-items: center; justify-content: center; font-size: 7px; color: var(--muted);
+    }
+    .d-up    { top:0;    left:50%; transform:translateX(-50%); }
+    .d-down  { bottom:0; left:50%; transform:translateX(-50%); }
+    .d-left  { top:50%;  left:0;   transform:translateY(-50%); }
+    .d-right { top:50%;  right:0;  transform:translateY(-50%); }
+    .d-mid   { position:absolute; inset:0; margin:auto; width:1.4rem; height:1.4rem; background:#222; }
+
+    /* MAP */
+    #map { background: var(--bg); border-top: 4px solid var(--border); }
+    .map-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: .5rem; }
+    @media(min-width:480px){ .map-grid { grid-template-columns: repeat(3,1fr); } }
+    .map-card { border: 2px solid var(--border); padding: 1rem; background: var(--bg3); }
+    .map-card:hover { border-color: var(--green); }
+    .map-head { display: flex; align-items: center; gap: .75rem; margin-bottom: .75rem; }
+    .map-name { font-size: 8px; color: var(--green); display: block; margin-bottom: .2rem; }
+    .map-sub  { font-size: 6px; color: var(--dim); }
+    .map-desc { font-size: 7px; color: #444; line-height: 2.2; }
+
+    /* SCORES */
+    #scores { background: var(--bg2); border-top: 4px solid var(--border); }
+    .score-table { border: 4px solid #555; }
+    .score-row { display: grid; grid-template-columns: 2.5rem 1fr 1fr 3.5rem; padding: .65rem 1rem; border-bottom: 1px solid #111; }
+    .score-row:hover { background: #111; }
+    .score-row.top { background: #0f0a00; }
+    .score-head { border-bottom: 2px solid var(--border) !important; }
+    .score-row span { font-size: 7px; }
+    .c-rank { color: var(--dim); }
+    .c-name { color: var(--muted); letter-spacing: .18em; }
+    .c-pts  { color: var(--fore); }
+    .c-stg  { color: var(--green); }
+    .score-row.top .c-rank,
+    .score-row.top .c-name,
+    .score-row.top .c-pts { color: var(--yellow); }
+    .score-hint { text-align: center; margin-top: 1.5rem; font-size: 7px; color: #2a2a2a; letter-spacing: .1em; }
+
+    /* FOOTER */
+    footer { border-top: 4px solid var(--border); background: var(--bg2); padding: 3rem 1.5rem; text-align: center; }
+    .footer-tanks { display: flex; justify-content: center; gap: 1.5rem; margin-bottom: 1.5rem; align-items: center; }
+    .footer-title { font-size: 8px; color: var(--yellow); letter-spacing: .1em; display: block; margin-bottom: 1.5rem; }
+    .footer-links { display: flex; justify-content: center; flex-wrap: wrap; gap: 1.5rem; margin-bottom: 1.5rem; }
+    .footer-links a { font-size: 7px; color: #333; text-decoration: none; letter-spacing: .1em; }
+    .footer-links a:hover { color: var(--yellow); }
+    .footer-copy { font-size: 7px; color: #2a2a2a; letter-spacing: .08em; line-height: 2.6; }
+  </style>
+</head>
+<body>
+
+<!-- ══ NAV ══════════════════════════════════════════════════════════════════ -->
+<nav id="nav">
+  <a class="nav-logo" href="#">
+    <svg width="20" height="20" viewBox="0 0 16 16" style="image-rendering:pixelated">
+      <rect x="7" y="0"  width="2" height="5"  fill="#f7c948"/>
+      <rect x="5" y="4"  width="6" height="5"  fill="#f7c948"/>
+      <rect x="2" y="7"  width="12" height="6" fill="#f7c948"/>
+      <rect x="0" y="5"  width="3" height="9"  fill="#f7c948"/>
+      <rect x="13" y="5" width="3" height="9"  fill="#f7c948"/>
+    </svg>
+    <span>坦克大战</span>
+  </a>
+  <div class="nav-links">
+    <a href="#tanks">坦克图鉴</a>
+    <a href="#howto">操作指南</a>
+    <a href="#map">地形大全</a>
+    <a href="#scores">排行榜</a>
+  </div>
+  <button class="hamburger" onclick="toggleMenu()">≡</button>
+</nav>
+<div id="mobile-menu">
+  <a href="#tanks"  onclick="closeMenu()">坦克图鉴</a>
+  <a href="#howto"  onclick="closeMenu()">操作指南</a>
+  <a href="#map"    onclick="closeMenu()">地形大全</a>
+  <a href="#scores" onclick="closeMenu()">排行榜</a>
+</div>
+
+<!-- ══ HERO ═════════════════════════════════════════════════════════════════ -->
+<section id="hero">
+  <div class="scorebar">
+    <span>1号</span><span>00000</span>
+    <span>最高分</span><span>20000</span>
+    <span>2号</span><span>00000</span>
+  </div>
+
+  <h1 class="hero-title glow">坦克大战</h1>
+  <p class="hero-sub">BATTLE CITY &nbsp;·&nbsp; 1985</p>
+
+  <div class="scene">
+    <div class="s-player bob">
+      <svg width="52" height="52" viewBox="0 0 16 16" style="image-rendering:pixelated">
+        <rect x="7" y="0"  width="2" height="5"  fill="#f7c948"/>
+        <rect x="5" y="4"  width="6" height="5"  fill="#f7c948"/>
+        <rect x="2" y="7"  width="12" height="6" fill="#f7c948"/>
+        <rect x="0" y="5"  width="3" height="9"  fill="#f7c948"/>
+        <rect x="0" y="5"  width="3" height="1"  fill="#000" opacity=".4"/>
+        <rect x="0" y="8"  width="3" height="1"  fill="#000" opacity=".4"/>
+        <rect x="0" y="11" width="3" height="1"  fill="#000" opacity=".4"/>
+        <rect x="13" y="5"  width="3" height="9" fill="#f7c948"/>
+        <rect x="13" y="5"  width="3" height="1" fill="#000" opacity=".4"/>
+        <rect x="13" y="8"  width="3" height="1" fill="#000" opacity=".4"/>
+        <rect x="13" y="11" width="3" height="1" fill="#000" opacity=".4"/>
+      </svg>
+    </div>
+    <div class="s-bullet"></div>
+    <div class="s-enemy">
+      <svg width="44" height="44" viewBox="0 0 16 16" style="image-rendering:pixelated">
+        <rect x="7" y="11" width="2" height="5"  fill="#c0c0c0"/>
+        <rect x="5" y="7"  width="6" height="5"  fill="#c0c0c0"/>
+        <rect x="2" y="3"  width="12" height="6" fill="#c0c0c0"/>
+        <rect x="0" y="2"  width="3" height="9"  fill="#c0c0c0"/>
+        <rect x="0" y="2"  width="3" height="1"  fill="#000" opacity=".4"/>
+        <rect x="0" y="5"  width="3" height="1"  fill="#000" opacity=".4"/>
+        <rect x="0" y="8"  width="3" height="1"  fill="#000" opacity=".4"/>
+        <rect x="13" y="2" width="3" height="9"  fill="#c0c0c0"/>
+        <rect x="13" y="2" width="3" height="1"  fill="#000" opacity=".4"/>
+        <rect x="13" y="5" width="3" height="1"  fill="#000" opacity=".4"/>
+        <rect x="13" y="8" width="3" height="1"  fill="#000" opacity=".4"/>
+      </svg>
+    </div>
+    <div class="s-brick1">
+      <svg width="28" height="28" viewBox="0 0 8 8" style="image-rendering:pixelated">
+        <rect x="0" y="0" width="8" height="8" fill="#c84c00"/>
+        <rect x="0" y="0" width="4" height="3" fill="#e06020"/>
+        <rect x="4" y="0" width="4" height="3" fill="#e06020"/>
+        <rect x="2" y="4" width="4" height="3" fill="#e06020"/>
+        <rect x="0" y="4" width="2" height="3" fill="#e06020"/>
+        <rect x="6" y="4" width="2" height="3" fill="#e06020"/>
+      </svg>
+    </div>
+    <div class="s-brick2">
+      <svg width="28" height="28" viewBox="0 0 8 8" style="image-rendering:pixelated">
+        <rect x="0" y="0" width="8" height="8" fill="#c84c00"/>
+        <rect x="0" y="0" width="4" height="3" fill="#e06020"/>
+        <rect x="4" y="0" width="4" height="3" fill="#e06020"/>
+        <rect x="2" y="4" width="4" height="3" fill="#e06020"/>
+      </svg>
+    </div>
+    <div class="s-base">
+      <svg width="40" height="40" viewBox="0 0 16 16" style="image-rendering:pixelated">
+        <rect x="4" y="0"  width="8"  height="2" fill="#e83030"/>
+        <rect x="2" y="2"  width="12" height="2" fill="#e83030"/>
+        <rect x="0" y="4"  width="16" height="8" fill="#e83030"/>
+        <rect x="2" y="12" width="12" height="2" fill="#e83030"/>
+        <rect x="4" y="14" width="8"  height="2" fill="#e83030"/>
+        <rect x="7" y="5"  width="2"  height="6" fill="#000"/>
+        <rect x="4" y="8"  width="8"  height="2" fill="#000"/>
+      </svg>
+    </div>
+  </div>
+
+  <a class="cta-btn" href="#tanks">立即体验</a>
+
+  <div class="lives">
+    <svg width="22" height="22" viewBox="0 0 16 16" style="image-rendering:pixelated"><rect x="7" y="0" width="2" height="5" fill="#f7c948"/><rect x="5" y="4" width="6" height="5" fill="#f7c948"/><rect x="2" y="7" width="12" height="6" fill="#f7c948"/><rect x="0" y="5" width="3" height="9" fill="#f7c948"/><rect x="13" y="5" width="3" height="9" fill="#f7c948"/></svg>
+    <svg width="22" height="22" viewBox="0 0 16 16" style="image-rendering:pixelated"><rect x="7" y="0" width="2" height="5" fill="#f7c948"/><rect x="5" y="4" width="6" height="5" fill="#f7c948"/><rect x="2" y="7" width="12" height="6" fill="#f7c948"/><rect x="0" y="5" width="3" height="9" fill="#f7c948"/><rect x="13" y="5" width="3" height="9" fill="#f7c948"/></svg>
+    <svg width="22" height="22" viewBox="0 0 16 16" style="image-rendering:pixelated"><rect x="7" y="0" width="2" height="5" fill="#f7c948"/><rect x="5" y="4" width="6" height="5" fill="#f7c948"/><rect x="2" y="7" width="12" height="6" fill="#f7c948"/><rect x="0" y="5" width="3" height="9" fill="#f7c948"/><rect x="13" y="5" width="3" height="9" fill="#f7c948"/></svg>
+    <span>× 3</span>
+  </div>
+
+  <div class="marquee-wrap">
+    <div class="marquee-inner">★ 坦克大战 ★ 经典300合1游戏 ★ 1985年 ★ 保卫基地 消灭敌人 ★ 一号机 二号机 双人合作 ★ 第01关 ★ 奖励关卡 ★ 共消灭20辆坦克 ★&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</div>
+  </div>
+  <div class="scroll-hint blink">▼</div>
+</section>
+
+<!-- STAT BAR -->
+<div class="stat-bar">
+  <div class="stat-row">
+    <div class="stat-item"><span class="stat-v">35</span><span class="stat-l">游戏关卡</span></div>
+    <div class="stat-item"><span class="stat-v">4</span><span class="stat-l">敌方坦克类型</span></div>
+    <div class="stat-item"><span class="stat-v">6</span><span class="stat-l">道具种类</span></div>
+    <div class="stat-item"><span class="stat-v">2P</span><span class="stat-l">双人合作</span></div>
+  </div>
+</div>
+
+<!-- ══ TANKS ═════════════════════════════════════════════════════════════════ -->
+<section id="tanks">
+  <div class="inner">
+    <span class="sec-label">── 敌方坦克 ──</span>
+    <h2 class="sec-title">坦克图鉴</h2>
+
+    <div class="tank-tabs">
+      <div class="tank-tab active" onclick="selectTank(0)">
+        <svg width="30" height="30" viewBox="0 0 16 16" style="image-rendering:pixelated">
+          <rect x="7" y="11" width="2" height="5" fill="currentColor"/>
+          <rect x="5" y="7"  width="6" height="5" fill="currentColor"/>
+          <rect x="2" y="3"  width="12" height="6" fill="currentColor"/>
+          <rect x="0" y="2"  width="3" height="9"  fill="currentColor"/>
+          <rect x="13" y="2" width="3" height="9"  fill="currentColor"/>
+        </svg>
+        普通型
+      </div>
+      <div class="tank-tab" onclick="selectTank(1)">
+        <svg width="30" height="30" viewBox="0 0 16 16" style="image-rendering:pixelated">
+          <rect x="7" y="11" width="2" height="5" fill="currentColor"/>
+          <rect x="5" y="7"  width="6" height="5" fill="currentColor"/>
+          <rect x="2" y="3"  width="12" height="6" fill="currentColor"/>
+          <rect x="0" y="2"  width="3" height="9"  fill="currentColor"/>
+          <rect x="13" y="2" width="3" height="9"  fill="currentColor"/>
+        </svg>
+        快速型
+      </div>
+      <div class="tank-tab" onclick="selectTank(2)">
+        <svg width="30" height="30" viewBox="0 0 16 16" style="image-rendering:pixelated">
+          <rect x="7" y="11" width="2" height="5" fill="currentColor"/>
+          <rect x="5" y="7"  width="6" height="5" fill="currentColor"/>
+          <rect x="2" y="3"  width="12" height="6" fill="currentColor"/>
+          <rect x="0" y="2"  width="3" height="9"  fill="currentColor"/>
+          <rect x="13" y="2" width="3" height="9"  fill="currentColor"/>
+        </svg>
+        强力型
+      </div>
+      <div class="tank-tab" onclick="selectTank(3)">
+        <svg width="30" height="30" viewBox="0 0 16 16" style="image-rendering:pixelated">
+          <rect x="7" y="11" width="2" height="5" fill="currentColor"/>
+          <rect x="5" y="7"  width="6" height="5" fill="currentColor"/>
+          <rect x="7" y="9"  width="2" height="2" fill="#e83030"/>
+          <rect x="2" y="3"  width="12" height="6" fill="currentColor"/>
+          <rect x="0" y="2"  width="3" height="9"  fill="currentColor"/>
+          <rect x="13" y="2" width="3" height="9"  fill="currentColor"/>
+        </svg>
+        装甲型
+      </div>
+    </div>
+
+    <div class="tank-detail" id="tank-detail"></div>
+  </div>
+</section>
+
+<!-- ══ HOW TO PLAY ════════════════════════════════════════════════════════════ -->
+<section id="howto">
+  <div class="inner">
+    <span class="sec-label">── 游戏说明 ──</span>
+    <h2 class="sec-title">操作指南</h2>
+    <div class="howto-grid">
+      <div class="howto-panel">
+        <span class="panel-label">— 按键操作 —</span>
+        <div class="key-row"><span class="key-badge">↑ ↓ ← →</span><span class="key-val">移动坦克</span></div>
+        <div class="key-row"><span class="key-badge">空格 / A键</span><span class="key-val">发射子弹</span></div>
+        <div class="key-row"><span class="key-badge">开始键</span><span class="key-val">开始 / 暂停</span></div>
+        <div class="key-row" style="border:none;padding:0;margin:0"><span class="key-badge">选择键</span><span class="key-val">切换模式</span></div>
+        <div class="dpad">
+          <div class="dpad-btn d-up">▲</div>
+          <div class="dpad-btn d-down">▼</div>
+          <div class="dpad-btn d-left">◀</div>
+          <div class="dpad-btn d-right">▶</div>
+          <div class="d-mid"></div>
+        </div>
+      </div>
+      <div class="howto-panel">
+        <span class="panel-label">— 游戏规则 —</span>
+        <div class="rule-row"><span class="rule-num">01</span><p class="rule-txt">保护屏幕下方的老鹰基地，基地被摧毁则游戏结束。</p></div>
+        <div class="rule-row"><span class="rule-num">02</span><p class="rule-txt">每关消灭全部 20 辆敌方坦克才能通关。</p></div>
+        <div class="rule-row"><span class="rule-num">03</span><p class="rule-txt">玩家最多有 3 条生命，用完则游戏结束。</p></div>
+        <div class="rule-row"><span class="rule-num">04</span><p class="rule-txt">支持双人同屏合作，P1 P2 共同守卫基地。</p></div>
+        <div class="rule-row" style="margin:0"><span class="rule-num">05</span><p class="rule-txt">消灭闪烁的敌方坦克可获得道具，善用道具是通关关键。</p></div>
+        <div class="eagle-warn">
+          <svg width="38" height="38" viewBox="0 0 16 16" style="image-rendering:pixelated;flex-shrink:0">
+            <rect x="4" y="0"  width="8"  height="2" fill="#e83030"/>
+            <rect x="2" y="2"  width="12" height="2" fill="#e83030"/>
+            <rect x="0" y="4"  width="16" height="8" fill="#e83030"/>
+            <rect x="2" y="12" width="12" height="2" fill="#e83030"/>
+            <rect x="4" y="14" width="8"  height="2" fill="#e83030"/>
+            <rect x="7" y="5"  width="2"  height="6" fill="#000"/>
+            <rect x="4" y="8"  width="8"  height="2" fill="#000"/>
+          </svg>
+          <div>
+            <span class="warn-red blink">保护基地！</span>
+            <span class="warn-gray">基地被毁 = 游戏结束</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ MAP ════════════════════════════════════════════════════════════════════ -->
+<section id="map">
+  <div class="inner">
+    <span class="sec-label">── 地图元素 ──</span>
+    <h2 class="sec-title">地形大全</h2>
+    <div class="map-grid">
+      <div class="map-card">
+        <div class="map-head">
+          <svg width="32" height="32" viewBox="0 0 8 8" style="image-rendering:pixelated;flex-shrink:0">
+            <rect x="0" y="0" width="8" height="8" fill="#c84c00"/>
+            <rect x="0" y="0" width="4" height="3" fill="#e06020"/>
+            <rect x="4" y="0" width="4" height="3" fill="#e06020"/>
+            <rect x="2" y="4" width="4" height="3" fill="#e06020"/>
+            <rect x="0" y="4" width="2" height="3" fill="#e06020"/>
+            <rect x="6" y="4" width="2" height="3" fill="#e06020"/>
+          </svg>
+          <div><span class="map-name">砖墙</span><span class="map-sub">BRICK</span></div>
+        </div>
+        <p class="map-desc">可被普通子弹摧毁，也可被铲子道具加固为钢墙。</p>
+      </div>
+      <div class="map-card">
+        <div class="map-head">
+          <svg width="32" height="32" viewBox="0 0 8 8" style="image-rendering:pixelated;flex-shrink:0">
+            <rect x="0" y="0" width="8" height="8" fill="#606090"/>
+            <rect x="0" y="0" width="4" height="3" fill="#9090c0"/>
+            <rect x="4" y="4" width="4" height="3" fill="#9090c0"/>
+            <rect x="4" y="0" width="4" height="3" fill="#707090"/>
+            <rect x="0" y="4" width="4" height="3" fill="#707090"/>
+          </svg>
+          <div><span class="map-name">钢墙</span><span class="map-sub">STEEL</span></div>
+        </div>
+        <p class="map-desc">普通子弹无法摧毁，只有升级后的坦克才能击穿。</p>
+      </div>
+      <div class="map-card">
+        <div class="map-head">
+          <div style="width:32px;height:32px;background:#004488;border:2px solid #0066aa;flex-shrink:0"></div>
+          <div><span class="map-name">河流</span><span class="map-sub">WATER</span></div>
+        </div>
+        <p class="map-desc">坦克无法通过，子弹可以飞越，形成天然屏障。</p>
+      </div>
+      <div class="map-card">
+        <div class="map-head">
+          <div style="width:32px;height:32px;background:#006600;border:2px solid #008800;flex-shrink:0"></div>
+          <div><span class="map-name">丛林</span><span class="map-sub">FOREST</span></div>
+        </div>
+        <p class="map-desc">坦克可以进入但会被遮蔽，形成天然的伏击点。</p>
+      </div>
+      <div class="map-card">
+        <div class="map-head">
+          <div style="width:32px;height:32px;background:#888866;border:2px solid #aaaa88;flex-shrink:0"></div>
+          <div><span class="map-name">冰面</span><span class="map-sub">ICE</span></div>
+        </div>
+        <p class="map-desc">坦克在冰面上会惯性滑行，操控更加困难。</p>
+      </div>
+      <div class="map-card">
+        <div class="map-head">
+          <svg width="36" height="36" viewBox="0 0 16 16" style="image-rendering:pixelated;flex-shrink:0">
+            <rect x="4" y="0"  width="8"  height="2" fill="#e83030"/>
+            <rect x="2" y="2"  width="12" height="2" fill="#e83030"/>
+            <rect x="0" y="4"  width="16" height="8" fill="#e83030"/>
+            <rect x="2" y="12" width="12" height="2" fill="#e83030"/>
+            <rect x="4" y="14" width="8"  height="2" fill="#e83030"/>
+            <rect x="7" y="5"  width="2"  height="6" fill="#000"/>
+            <rect x="4" y="8"  width="8"  height="2" fill="#000"/>
+          </svg>
+          <div><span class="map-name">老鹰基地</span><span class="map-sub">EAGLE</span></div>
+        </div>
+        <p class="map-desc">最重要的守护目标，被摧毁即宣告游戏失败。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ SCORES ═════════════════════════════════════════════════════════════════ -->
+<section id="scores">
+  <div class="inner">
+    <span class="sec-label">── 最高纪录 ──</span>
+    <h2 class="sec-title">排行榜</h2>
+    <div class="score-table">
+      <div class="score-row score-head"><span class="c-rank">名次</span><span class="c-name">玩家</span><span class="c-pts">得分</span><span class="c-stg">关卡</span></div>
+      <div class="score-row top"><span class="c-rank">01</span><span class="c-name glow">AAA</span><span class="c-pts">99,900</span><span class="c-stg">35</span></div>
+      <div class="score-row"><span class="c-rank">02</span><span class="c-name">YSK</span><span class="c-pts">86,400</span><span class="c-stg">30</span></div>
+      <div class="score-row"><span class="c-rank">03</span><span class="c-name">TAK</span><span class="c-pts">72,000</span><span class="c-stg">25</span></div>
+      <div class="score-row"><span class="c-rank">04</span><span class="c-name">NMC</span><span class="c-pts">58,500</span><span class="c-stg">21</span></div>
+      <div class="score-row"><span class="c-rank">05</span><span class="c-name">PLR</span><span class="c-pts">43,200</span><span class="c-stg">16</span></div>
+      <div class="score-row"><span class="c-rank">06</span><span class="c-name">CPU</span><span class="c-pts">34,800</span><span class="c-stg">13</span></div>
+      <div class="score-row"><span class="c-rank">07</span><span class="c-name">MSY</span><span class="c-pts">28,100</span><span class="c-stg">10</span></div>
+      <div class="score-row" style="border:none"><span class="c-rank">08</span><span class="c-name">---</span><span class="c-pts">20,000</span><span class="c-stg">07</span></div>
+    </div>
+    <p class="score-hint blink">你的纪录将显示在这里</p>
+  </div>
+</section>
+
+<!-- ══ FOOTER ═════════════════════════════════════════════════════════════════ -->
+<footer>
+  <div class="footer-tanks">
+    <svg width="28" height="28" viewBox="0 0 16 16" style="image-rendering:pixelated"><rect x="7" y="0" width="2" height="5" fill="#f7c948"/><rect x="5" y="4" width="6" height="5" fill="#f7c948"/><rect x="2" y="7" width="12" height="6" fill="#f7c948"/><rect x="0" y="5" width="3" height="9" fill="#f7c948"/><rect x="13" y="5" width="3" height="9" fill="#f7c948"/></svg>
+    <svg width="36" height="36" viewBox="0 0 16 16" style="image-rendering:pixelated"><rect x="4" y="0" width="8" height="2" fill="#e83030"/><rect x="2" y="2" width="12" height="2" fill="#e83030"/><rect x="0" y="4" width="16" height="8" fill="#e83030"/><rect x="2" y="12" width="12" height="2" fill="#e83030"/><rect x="4" y="14" width="8" height="2" fill="#e83030"/><rect x="7" y="5" width="2" height="6" fill="#000"/><rect x="4" y="8" width="8" height="2" fill="#000"/></svg>
+    <svg width="28" height="28" viewBox="0 0 16 16" style="image-rendering:pixelated"><rect x="7" y="0" width="2" height="5" fill="#4cde4c"/><rect x="5" y="4" width="6" height="5" fill="#4cde4c"/><rect x="2" y="7" width="12" height="6" fill="#4cde4c"/><rect x="0" y="5" width="3" height="9" fill="#4cde4c"/><rect x="13" y="5" width="3" height="9" fill="#4cde4c"/></svg>
+  </div>
+  <span class="footer-title">坦克大战 BATTLE CITY</span>
+  <div class="footer-links">
+    <a href="#tanks">坦克图鉴</a>
+    <a href="#howto">操作指南</a>
+    <a href="#map">地形大全</a>
+    <a href="#scores">排行榜</a>
+  </div>
+  <p class="footer-copy">© 1985 NAMCO 版权所有<br>300合1 经典游戏卡带 · 致我们逝去的童年</p>
+</footer>
+
+<script>
+const TANKS = [
+  { label:'普通型', sub:'BASIC',  color:'#c0c0c0', dot:false, hp:1, speed:'普通', bullet:'普通', pts:100, desc:'最常见的敌方坦克，速度和火力均为普通水平。一炮即可摧毁。' },
+  { label:'快速型', sub:'FAST',   color:'#c0c0c0', dot:false, hp:1, speed:'极快', bullet:'普通', pts:200, desc:'移动速度极快，难以瞄准。但防御力与普通型相同，一炮可摧毁。' },
+  { label:'强力型', sub:'POWER',  color:'#c0c0c0', dot:false, hp:1, speed:'普通', bullet:'高速', pts:300, desc:'子弹速度更快，可以穿透砖墙，对玩家威胁极大，需优先消灭。' },
+  { label:'装甲型', sub:'ARMOR',  color:'#4cde4c', dot:true,  hp:4, speed:'缓慢', bullet:'普通', pts:400, desc:'最强的敌方坦克，需要四次命中才能摧毁。每次命中后颜色变化。' },
+];
+
+function tankSVG(c, dot, size) {
+  const d = dot ? '<rect x="7" y="9" width="2" height="2" fill="#e83030"/>' : '';
+  return `<svg width="${size}" height="${size}" viewBox="0 0 16 16" style="image-rendering:pixelated">
+    <rect x="7" y="11" width="2" height="5" fill="${c}"/>
+    <rect x="5" y="7"  width="6" height="5" fill="${c}"/>${d}
+    <rect x="2" y="3"  width="12" height="6" fill="${c}"/>
+    <rect x="0" y="2"  width="3" height="9"  fill="${c}"/>
+    <rect x="0" y="2"  width="3" height="1"  fill="#000" opacity=".4"/>
+    <rect x="0" y="5"  width="3" height="1"  fill="#000" opacity=".4"/>
+    <rect x="0" y="8"  width="3" height="1"  fill="#000" opacity=".4"/>
+    <rect x="13" y="2" width="3" height="9"  fill="${c}"/>
+    <rect x="13" y="2" width="3" height="1"  fill="#000" opacity=".4"/>
+    <rect x="13" y="5" width="3" height="1"  fill="#000" opacity=".4"/>
+    <rect x="13" y="8" width="3" height="1"  fill="#000" opacity=".4"/>
+  </svg>`;
+}
+
+function stars(n) { return '★'.repeat(n) + '☆'.repeat(4 - n); }
+
+function renderTank(i) {
+  const t = TANKS[i];
+  document.getElementById('tank-detail').innerHTML = `
+    <div class="tank-showcase">
+      ${tankSVG(t.color, t.dot, 96)}
+      <p class="tank-name">${t.label}</p>
+      <p class="tank-sub">${t.sub}</p>
+      <div class="tank-pts">+${t.pts} 分</div>
+    </div>
+    <div>
+      <div class="spec-grid">
+        <div class="spec-cell"><p class="spec-k">耐久</p><p class="spec-v">${stars(t.hp)}</p></div>
+        <div class="spec-cell"><p class="spec-k">速度</p><p class="spec-v">${t.speed}</p></div>
+        <div class="spec-cell"><p class="spec-k">子弹</p><p class="spec-v">${t.bullet}</p></div>
+        <div class="spec-cell"><p class="spec-k">得分</p><p class="spec-v">${t.pts} 分</p></div>
+      </div>
+      <p class="tank-desc">${t.desc}</p>
+    </div>`;
+}
+
+function selectTank(i) {
+  document.querySelectorAll('.tank-tab').forEach((el, j) => el.classList.toggle('active', i === j));
+  renderTank(i);
+}
+
+function toggleMenu() {
+  const m = document.getElementById('mobile-menu');
+  const open = m.style.display === 'flex';
+  m.style.display = open ? 'none' : 'flex';
+  document.querySelector('.hamburger').textContent = open ? '≡' : '✕';
+}
+function closeMenu() {
+  document.getElementById('mobile-menu').style.display = 'none';
+  document.querySelector('.hamburger').textContent = '≡';
+}
+
+renderTank(0);
+</script>
+</body>
+</html>
