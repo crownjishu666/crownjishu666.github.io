@@ -1,7 +1,7 @@
 import { defineConfig, type HtmlTagDescriptor, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { existsSync, readFileSync } from 'node:fs'
+import { cpSync, existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
 const siteConfigPath = path.resolve(__dirname, '.figma/make/site.json')
@@ -28,6 +28,7 @@ react(),
       figmaErrorOverlayReplay(),
       figmaReactRefreshBoundaryFallback(),
       figmaMakeKitPlugin({ storiesGlob: '/src/**/*.stories.{ts,tsx,js,jsx}' }),
+      copyPrivacyPage(),
     ],
     resolve: {
       alias: {
@@ -75,6 +76,28 @@ type FigmaSiteConfiguration = {
   }
   accessibility?: {
     addBypassLinks?: boolean
+  }
+}
+
+/** Keeps /privacy/index.html available after the Pages deploy of dist/. */
+function copyPrivacyPage(): Plugin {
+  const privacyFile = path.resolve(__dirname, 'privacy/index.html')
+  return {
+    name: 'copy-privacy-page',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const url = req.url?.split('?')[0]
+        if (url !== '/privacy' && url !== '/privacy/' && url !== '/privacy/index.html') return next()
+        if (!existsSync(privacyFile)) return next()
+        res.setHeader('Content-Type', 'text/html; charset=utf-8')
+        res.end(readFileSync(privacyFile))
+      })
+    },
+    closeBundle() {
+      const from = path.resolve(__dirname, 'privacy')
+      if (!existsSync(from)) return
+      cpSync(from, path.resolve(__dirname, 'dist/privacy'), { recursive: true })
+    },
   }
 }
 

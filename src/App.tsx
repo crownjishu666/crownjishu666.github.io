@@ -578,6 +578,14 @@ function Footer() {
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
 
+const NAV_ITEMS = [
+  ['#tanks', '坦克图鉴'],
+  ['#howto', '操作指南'],
+  ['#map', '地形大全'],
+  ['#scores', '排行榜'],
+  ['/privacy/index.html', '隐私协议'],
+] as const
+
 function Nav() {
   const [open, setOpen] = useState(false)
   return (
@@ -588,7 +596,7 @@ function Nav() {
           <span className="text-[#f7c948]" style={{ fontSize: '8px', letterSpacing: '0.1em' }}>坦克大战</span>
         </a>
         <div className="hidden md:flex items-center gap-6">
-          {[['#tanks','坦克图鉴'], ['#howto','操作指南'], ['#map','地形大全'], ['#scores','排行榜']].map(([h, l]) => (
+          {NAV_ITEMS.map(([h, l]) => (
             <a key={h} href={h} className="text-[#f7c948] hover:text-white transition-colors" style={{ fontSize: '7px', letterSpacing: '0.15em' }}>{l}</a>
           ))}
         </div>
@@ -598,7 +606,7 @@ function Nav() {
       </div>
       {open && (
         <div className="md:hidden bg-[#5a3d00] border-t-2 border-[#f7c948] px-4 py-3 flex flex-col gap-3">
-          {[['#tanks','坦克图鉴'], ['#howto','操作指南'], ['#map','地形大全'], ['#scores','排行榜']].map(([h, l]) => (
+          {NAV_ITEMS.map(([h, l]) => (
             <a key={h} href={h} onClick={() => setOpen(false)} className="text-[#f7c948]" style={{ fontSize: '8px', letterSpacing: '0.15em' }}>{l}</a>
           ))}
         </div>
